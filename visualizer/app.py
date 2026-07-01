@@ -4,6 +4,13 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Load .env file (GEMINI_API_KEY)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"))
+except ImportError:
+    pass
+
 import streamlit as st
 import numpy as np
 
@@ -14,7 +21,10 @@ st.set_page_config(
 )
 
 from problems import PROBLEM_REGISTRY
+from gemini_generator import generate_with_gemini
 
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def display_value(val, label=""):
     import pandas as pd
@@ -44,62 +54,17 @@ def display_answer(ans):
         st.success(f"✅ **Answer:** `{ans}`")
 
 
-def main():
-    st.title("🧠 Deep-ML Problem Explorer")
-    st.markdown(
-        "*Type any concept name → get a concrete worked example, "
-        "step-by-step solution with real numbers, and a visualization.*"
-    )
+def get_api_key() -> str:
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key:
+        key = st.session_state.get("gemini_key", "").strip()
+    return key
 
-    # ── Sidebar ──────────────────────────────────────────────────────────────
-    st.sidebar.title("🔍 Find a Concept")
-    query = st.sidebar.text_input("Search", placeholder="e.g. Softmax, F1 Score, Jacobian…")
 
-    cats = ["All"] + sorted(set(p["category"] for p in PROBLEM_REGISTRY.values()))
-    cat = st.sidebar.selectbox("Category", cats)
+# ── Pre-built problem renderer ─────────────────────────────────────────────────
 
-    q = query.strip().lower()
-    filtered = {
-        name: p for name, p in PROBLEM_REGISTRY.items()
-        if (cat == "All" or p["category"] == cat)
-        and (
-            not q
-            or q in name.lower()
-            or q in p["description"].lower()
-            or any(q in t.lower() for t in p.get("tags", []))
-        )
-    }
-
-    if not filtered:
-        st.sidebar.warning("No matches found.")
-        st.warning("No concept found — try a different search term or broaden the category.")
-        return
-
-    st.sidebar.markdown("---")
-    selected = st.sidebar.selectbox("Problem", sorted(filtered.keys()))
-    seed = st.sidebar.slider("Example Seed", 0, 99, 42,
-                             help="Change to get a different random example")
-
-    prob = PROBLEM_REGISTRY[selected]
-
-    # ── Header ───────────────────────────────────────────────────────────────
-    diff_icon = {"Easy": "🟢", "Medium": "🟡", "Hard": "🔴"}.get(prob.get("difficulty", ""), "⚪")
-    col1, col2 = st.columns([4, 1])
-    col1.header(selected)
-    col1.markdown(prob["description"])
-    col2.markdown(f"**Category:** {prob['category']}")
-    if "difficulty" in prob:
-        col2.markdown(f"**Difficulty:** {diff_icon} {prob['difficulty']}")
-
-    st.divider()
-
-    # ── Generate example ─────────────────────────────────────────────────────
-    try:
-        example = prob["generate"](seed)
-    except Exception as e:
-        st.error(f"Error generating example: {e}")
-        return
-
+def render_prebuilt(prob, seed):
+    example = prob["generate"](seed)
     tab1, tab2 = st.tabs(["📋 Example & Steps", "📊 Visualization"])
 
     with tab1:
@@ -109,7 +74,7 @@ def main():
 
         st.subheader("🔢 Step-by-Step Solution")
         for i, step in enumerate(prob["steps"](example)):
-            with st.expander(f"Step {i + 1}: {step['title']}", expanded=True):
+            with st.expander(f"Step {i+1}: {step['title']}", expanded=True):
                 st.write(step["explanation"])
                 if "math" in step:
                     st.latex(step["math"])
@@ -123,15 +88,155 @@ def main():
 
     with tab2:
         import matplotlib.pyplot as plt
-        try:
-            fig = prob["visualize"](example)
-            if fig is not None:
-                st.pyplot(fig)
-                plt.close(fig)
-            else:
-                st.info("No visualization available for this problem.")
-        except Exception as e:
-            st.error(f"Visualization error: {e}")
+        fig = prob["visualize"](example)
+        if fig is not None:
+            st.pyplot(fig)
+            plt.close(fig)
+        else:
+            st.info("No visualization available for this problem.")
+
+
+# ── AI-generated problem renderer ─────────────────────────────────────────────
+
+def render_ai_generated(concept: str, api_key: str):
+    with st.spinner(f"Generating explanation for **{concept}**…"):
+        result = generate_with_gemini(concept, api_key)
+
+    if "error" in result:
+        st.error(f"Generation failed: {result['error']}")
+        return
+
+    # Header info
+    col1, col2 = st.columns([4, 1])
+    col1.markdown(result.get("description", ""))
+    col2.markdown(f"**Category:** {result.get('category', '—')}")
+    diff_icon = {"Easy": "🟢", "Medium": "🟡", "Hard": "🔴"}.get(result.get("difficulty", ""), "⚪")
+    col2.markdown(f"**Difficulty:** {diff_icon} {result.get('difficulty', '—')}")
+
+    st.divider()
+
+    # Inputs
+    st.subheader("📥 Inputs")
+    for k, v in result.get("inputs", {}).items():
+        st.write(f"**{k}:** `{v}`")
+
+    # Steps
+    st.subheader("🔢 Step-by-Step Solution")
+    for i, step in enumerate(result.get("steps", [])):
+        with st.expander(f"Step {i+1}: {step.get('title', '')}", expanded=True):
+            st.write(step.get("explanation", ""))
+            if step.get("math"):
+                try:
+                    st.latex(step["math"])
+                except Exception:
+                    st.code(step["math"])
+            if step.get("result"):
+                st.write(f"**Result:** `{step['result']}`")
+            if step.get("code"):
+                st.code(step["code"], language="python")
+
+    if result.get("answer"):
+        st.success(f"✅ **Answer:** `{result['answer']}`")
+
+    st.caption("⚡ Generated by Gemini 1.5 Flash — cached for this session")
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def main():
+    st.title("🧠 Deep-ML Problem Explorer")
+    st.markdown(
+        "*Type **any** concept from Deep-ML → get a worked example, "
+        "step-by-step solution with real numbers, and a visualization.*"
+    )
+
+    # ── Sidebar ───────────────────────────────────────────────────────────────
+    st.sidebar.title("🔍 Search")
+    concept_input = st.sidebar.text_input(
+        "Type any concept",
+        placeholder="e.g. Batch Normalisation, Attention, PCA…"
+    )
+
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🤖 Gemini API Key")
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        entered = st.sidebar.text_input(
+            "Paste your key here",
+            type="password",
+            help="Get a free key at aistudio.google.com",
+            key="gemini_key_input"
+        )
+        if entered:
+            st.session_state["gemini_key"] = entered
+            api_key = entered
+    else:
+        st.sidebar.success("✅ API key loaded from .env")
+
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📚 Pre-built Problems")
+    cats = ["All"] + sorted(set(p["category"] for p in PROBLEM_REGISTRY.values()))
+    cat  = st.sidebar.selectbox("Filter by category", cats)
+
+    q = concept_input.strip().lower()
+    filtered = {
+        name: p for name, p in PROBLEM_REGISTRY.items()
+        if (cat == "All" or p["category"] == cat)
+        and (
+            not q
+            or q in name.lower()
+            or q in p["description"].lower()
+            or any(q in t.lower() for t in p.get("tags", []))
+        )
+    }
+
+    # ── Routing ───────────────────────────────────────────────────────────────
+    if not concept_input.strip():
+        # Landing state
+        st.info("👈 Type any concept name in the sidebar to get started.")
+        st.markdown("### Pre-built problems (instant, no API needed):")
+        for cat_name in sorted(set(p["category"] for p in PROBLEM_REGISTRY.values())):
+            names = [n for n, p in PROBLEM_REGISTRY.items() if p["category"] == cat_name]
+            st.markdown(f"**{cat_name}:** " + " · ".join(f"`{n}`" for n in sorted(names)))
+        return
+
+    if filtered:
+        # Found in pre-built library
+        best_match = sorted(
+            filtered.keys(),
+            key=lambda n: (0 if q in n.lower() else 1)
+        )[0]
+
+        st.sidebar.markdown(f"✅ Found in pre-built library")
+        selected = st.sidebar.selectbox("Matched problems", sorted(filtered.keys()), index=sorted(filtered.keys()).index(best_match))
+        seed = st.sidebar.slider("Example Seed", 0, 99, 42)
+
+        prob = PROBLEM_REGISTRY[selected]
+        diff_icon = {"Easy": "🟢", "Medium": "🟡", "Hard": "🔴"}.get(prob.get("difficulty", ""), "⚪")
+
+        col1, col2 = st.columns([4, 1])
+        col1.header(selected)
+        col1.markdown(prob["description"])
+        col2.markdown(f"**Category:** {prob['category']}")
+        col2.markdown(f"**Difficulty:** {diff_icon} {prob.get('difficulty', '—')}")
+        st.divider()
+
+        render_prebuilt(prob, seed)
+
+    else:
+        # Not in pre-built → use Gemini
+        st.header(concept_input.strip())
+
+        if not api_key:
+            st.warning(
+                "This concept isn't in the pre-built library. "
+                "To generate it with AI, paste your **Gemini API key** in the sidebar.\n\n"
+                "Get a free key at **aistudio.google.com** (no credit card needed)."
+            )
+            return
+
+        st.sidebar.info("💡 Not in library — generating with Gemini AI")
+        render_ai_generated(concept_input.strip(), api_key)
 
 
 if __name__ == "__main__":
