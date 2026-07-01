@@ -1,0 +1,11 @@
+from .linear_algebra import LINEAR_ALGEBRA_PROBLEMS
+from .metrics import METRICS_PROBLEMS
+from .activations import ACTIVATION_PROBLEMS
+from .optimization import OPTIMIZATION_PROBLEMS
+
+PROBLEM_REGISTRY = {
+    **LINEAR_ALGEBRA_PROBLEMS,
+    **METRICS_PROBLEMS,
+    **ACTIVATION_PROBLEMS,
+    **OPTIMIZATION_PROBLEMS,
+}
