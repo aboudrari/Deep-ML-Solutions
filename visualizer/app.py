@@ -20,8 +20,171 @@ st.set_page_config(
     layout="wide"
 )
 
+# ── Higgsfield-inspired dark design ──────────────────────────────────────────
+st.markdown("""
+<style>
+/* ── Base ── */
+.stApp { background-color: #080808; }
+
+/* ── Sidebar ── */
+[data-testid="stSidebar"] {
+    background-color: #0D0D0D;
+    border-right: 1px solid #1C1C1C;
+}
+[data-testid="stSidebar"] * { color: #E0E0E0; }
+
+/* ── Sidebar inputs ── */
+[data-testid="stSidebar"] input,
+[data-testid="stSidebar"] .stSelectbox > div > div,
+[data-testid="stSidebar"] [data-baseweb="select"] > div {
+    background-color: #161616 !important;
+    border: 1px solid #2A2A2A !important;
+    border-radius: 8px !important;
+    color: #FFFFFF !important;
+}
+[data-testid="stSidebar"] input:focus {
+    border-color: #AAFF00 !important;
+    box-shadow: 0 0 0 2px rgba(170,255,0,0.15) !important;
+}
+
+/* ── Title gradient ── */
+h1 {
+    background: linear-gradient(135deg, #FFFFFF 30%, #AAFF00 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 800 !important;
+    letter-spacing: -0.5px;
+}
+
+/* ── Section headers ── */
+h2, h3 { color: #FFFFFF !important; font-weight: 700 !important; }
+
+/* ── Tabs ── */
+[data-testid="stTabs"] [role="tablist"] {
+    background-color: #111111;
+    border-radius: 10px;
+    padding: 4px;
+    gap: 4px;
+    border: 1px solid #1C1C1C;
+}
+[data-testid="stTabs"] [role="tab"] {
+    color: #888888 !important;
+    border-radius: 8px;
+    padding: 8px 20px;
+    font-weight: 600;
+    border: none !important;
+}
+[data-testid="stTabs"] [role="tab"][aria-selected="true"] {
+    background-color: #1A1A1A !important;
+    color: #AAFF00 !important;
+    border: 1px solid #2A2A2A !important;
+}
+
+/* ── Expanders (steps) ── */
+[data-testid="stExpander"] {
+    background-color: #111111 !important;
+    border: 1px solid #1E1E1E !important;
+    border-radius: 10px !important;
+    margin-bottom: 8px !important;
+}
+[data-testid="stExpander"]:hover {
+    border-color: #AAFF00 !important;
+    transition: border-color 0.2s ease;
+}
+[data-testid="stExpander"] summary {
+    color: #FFFFFF !important;
+    font-weight: 600 !important;
+}
+[data-testid="stExpander"] summary:hover { color: #AAFF00 !important; }
+
+/* ── Metrics ── */
+[data-testid="stMetric"] {
+    background-color: #111111;
+    border: 1px solid #1E1E1E;
+    border-radius: 10px;
+    padding: 16px 20px;
+}
+[data-testid="stMetric"] label { color: #888888 !important; font-size: 13px !important; }
+[data-testid="stMetricValue"] { color: #AAFF00 !important; font-weight: 700 !important; }
+
+/* ── Code blocks ── */
+[data-testid="stCode"], .stCode,
+[data-testid="stCode"] pre {
+    background-color: #0D0D0D !important;
+    border: 1px solid #1E1E1E !important;
+    border-radius: 8px !important;
+}
+code { color: #AAFF00 !important; }
+
+/* ── Success / info / warning banners ── */
+[data-testid="stAlert"][kind="success"],
+.stSuccess {
+    background-color: rgba(170,255,0,0.07) !important;
+    border: 1px solid rgba(170,255,0,0.3) !important;
+    border-radius: 10px !important;
+    color: #AAFF00 !important;
+}
+[data-testid="stAlert"][kind="info"],
+.stInfo {
+    background-color: rgba(255,255,255,0.04) !important;
+    border: 1px solid #2A2A2A !important;
+    border-radius: 10px !important;
+    color: #CCCCCC !important;
+}
+[data-testid="stAlert"][kind="warning"],
+.stWarning {
+    background-color: rgba(255,170,0,0.07) !important;
+    border: 1px solid rgba(255,170,0,0.3) !important;
+    border-radius: 10px !important;
+}
+
+/* ── Divider ── */
+hr { border-color: #1E1E1E !important; }
+
+/* ── Dataframes ── */
+[data-testid="stDataFrame"] {
+    background-color: #111111 !important;
+    border: 1px solid #1E1E1E !important;
+    border-radius: 10px !important;
+}
+
+/* ── Slider track & thumb ── */
+[data-testid="stSlider"] [data-baseweb="slider"] div[role="slider"] {
+    background-color: #AAFF00 !important;
+    border-color: #AAFF00 !important;
+}
+
+/* ── Caption text ── */
+.stCaption { color: #555555 !important; }
+
+/* ── Spinner ── */
+.stSpinner > div { border-top-color: #AAFF00 !important; }
+
+/* ── Sidebar section labels ── */
+[data-testid="stSidebar"] .stSubheader { color: #AAFF00 !important; }
+</style>
+""", unsafe_allow_html=True)
+
 from problems import PROBLEM_REGISTRY
 from gemini_generator import generate_with_gemini
+
+# Dark matplotlib theme to match the UI
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+plt.style.use("dark_background")
+mpl.rcParams.update({
+    "axes.facecolor":   "#111111",
+    "figure.facecolor": "#111111",
+    "axes.edgecolor":   "#2A2A2A",
+    "axes.labelcolor":  "#CCCCCC",
+    "xtick.color":      "#888888",
+    "ytick.color":      "#888888",
+    "grid.color":       "#1E1E1E",
+    "text.color":       "#FFFFFF",
+    "legend.facecolor": "#161616",
+    "legend.edgecolor": "#2A2A2A",
+})
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
